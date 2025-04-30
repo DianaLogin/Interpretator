@@ -1,183 +1,171 @@
 #pragma once
-#include <array>
+#include <vector>
 #include <iostream>
 #include <stdexcept>
 #include <initializer_list>
 #include <string>
 #include "Vector.h"
 
-template <typename T, size_t Rows, size_t Cols>
+template <typename T>
 class Matrix
 {
 private:
-    std::array<T, Rows* Cols> data;
+    size_t rows, cols;
+    std::vector<T> data;
 
-    constexpr size_t index(size_t row, size_t col) const
+    size_t index(size_t row, size_t col) const 
     {
-        return row * Cols + col;
+        return row * cols + col;
     }
 
 public:
     Matrix() = default;
-    // Даже если конструктор с двумерным листом, можно его элементы скопировать в одномерный массив
-    // с помощью циклов, которые надо умудриться додуматься праильно написать еще 
-    Matrix(const std::initializer_list<std::initializer_list<T>>& list)
+
+    Matrix(size_t rows, size_t cols) : rows(rows), cols(cols), data(rows* cols)  { }
+
+    Matrix(const std::initializer_list<std::initializer_list<T>>& list) 
     {
-        if (list.size() != Rows)
+        rows = list.size();
+        if (rows == 0)
         {
-            throw std::invalid_argument("Неверное количество строк!");
+            throw std::invalid_argument("Пустая матрица!");
         }
 
-        size_t i = 0;
-        for (const auto& row : list)
+        cols = list.begin()->size();
+        for (const auto& row : list) 
         {
-            if (row.size() != Cols)
+            if (row.size() != cols)
             {
-                throw std::invalid_argument("Неверное количество столбцов!");
+                throw std::invalid_argument("Строки матрицы разной длины!");
             }
-            for (const auto& val : row)
+        }
+
+        data.reserve(rows * cols);
+        for (const auto& row : list) 
+        {
+            for (const auto& val : row) 
             {
-                data[i++] = val;
+                data.push_back(val);
             }
         }
     }
 
-    // Доступ к элементам через (), потому что массив в поле класса одномерный,
-    // а не двумерный. Не получится через [][] 
-    T& operator()(size_t row, size_t col)
+    size_t getRows() const { return rows; }
+    size_t getCols() const { return cols; }
+
+    T& operator()(size_t row, size_t col) 
     {
         return data[index(row, col)];
     }
-    const T& operator()(size_t row, size_t col) const
+
+    const T& operator()(size_t row, size_t col) const 
     {
         return data[index(row, col)];
     }
 
-
-    Matrix<T, Rows, Cols> operator+(const Matrix<T, Rows, Cols>& other) const
+    Matrix<T> operator+(const Matrix<T>& other) const 
     {
-        Matrix<T, Rows, Cols> result;
-        for (size_t i = 0; i < Rows; ++i)
+        if (rows != other.rows || cols != other.cols)
         {
-            for (size_t j = 0; j < Cols; ++j)
-            {
-                result(i, j) = (*this)(i, j) + other(i, j);
-            }
+            throw std::invalid_argument("Размеры матриц не совпадают!");
         }
+
+        Matrix<T> result(rows, cols);
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            result.data[i] = data[i] + other.data[i];
+        }
+
         return result;
     }
 
-    Matrix<T, Rows, Cols> operator-(const Matrix<T, Rows, Cols>& other) const
+    Matrix<T> operator-(const Matrix<T>& other) const 
     {
-        Matrix<T, Rows, Cols> result;
-        for (size_t i = 0; i < Rows; ++i)
+        if (rows != other.rows || cols != other.cols)
         {
-            for (size_t j = 0; j < Cols; ++j)
-            {
-                result(i, j) = (*this)(i, j) - other(i, j);
-            }
+            throw std::invalid_argument("Размеры матриц не совпадают!");
         }
-        return result;
-    }
-    // Умножение на скаляр
-    Matrix<T, Rows, Cols> operator*(T scalar) const
-    {
-        Matrix<T, Rows, Cols> result;
-        for (size_t i = 0; i < Rows; ++i)
+
+        Matrix<T> result(rows, cols);
+        for (size_t i = 0; i < data.size(); ++i)
         {
-            for (size_t j = 0; j < Cols; ++j)
-            {
-                result(i, j) = (*this)(i, j) * scalar;
-            }
+            result.data[i] = data[i] - other.data[i];
         }
+
         return result;
     }
 
-    friend std::ostream& operator<<(std::ostream& out, const Matrix<T, Rows, Cols>& m)
+
+    Matrix<T> operator*(T scalar) const 
+    {
+        Matrix<T> result(rows, cols);
+        for (size_t i = 0; i < data.size(); ++i)
+        {
+            result.data[i] = data[i] * scalar;
+        }
+
+        return result;
+    }
+
+    friend std::ostream& operator<<(std::ostream& out, const Matrix<T>& m) 
     {
         out << "{\n";
-        for (size_t i = 0; i < Rows; ++i)
+        for (size_t i = 0; i < m.rows; ++i)
         {
             out << "  {";
-            for (size_t j = 0; j < Cols; ++j)
+            for (size_t j = 0; j < m.cols; ++j) 
             {
                 out << m(i, j);
-                if (j < Cols - 1)
-                {
-                    out << ", ";
-                }
+                if (j < m.cols - 1) out << ", ";
             }
             out << "}";
-            if (i < Rows - 1)
-            {
-                out << ",";
-            }
+            if (i < m.rows - 1) out << ",";
             out << "\n";
         }
         out << "}";
         return out;
     }
 
-
-};
-
-// Нужен шаблон аж с 4 параметрами(!!!!!!!), потому что при запуске этой функции
-// умственно отсталый компилятор не знает ничего
-// кроме своих обычных Rows и Cols, которые в шаблоне класса, во Мудила он!!!!!
-
-template<typename T, size_t Rows_1, size_t Cols_1, size_t Rows_2, size_t Cols_2>
-// Тут явно показывыаю 2 аргумента умножения, чтоб удобнее было работать с колс ровс
-// А еще только этой функции нужно особое приглашение, чтоб она работала
-// Видишь ли, если она находится внутри класса, то тогда : "бинарный "operator *" имеет слишком много параметров"
-// Ну пришлось выгнать этот оператор из тусовки внутренностей класса
-// Ну и правильно... Туда его... На нашей тусовке могут быть простые операторы,
-// а не этот треш матричного умножения
-Matrix<T, Rows_1, Cols_2> operator*(const Matrix<T, Rows_1, Cols_1>& m_1, const Matrix<T, Rows_2, Cols_2>& m_2)
-{
-    if (Cols_1 != Rows_2)
+    Matrix<T> operator*(const Matrix<T>& other) const 
     {
-        throw std::invalid_argument(
-            "Количество столбцов 1 матрицы должно быть равно количеству строк 2 матрицы: " +
-            std::to_string(Cols_1) + " columns != " +
-            std::to_string(Rows_2) + " rows"
-        );
-    }
-    Matrix<T, Rows_1, Cols_2> result;
-    for (size_t i = 0; i < Rows_1; ++i)
-    {
-        for (size_t j = 0; j < Cols_2; ++j)
+        if (cols != other.rows)
         {
-            result(i, j) = 0;
-            for (size_t k = 0; k < Cols_1; ++k)
+            throw std::invalid_argument(
+                "Невозможно перемножить: " + std::to_string(cols) +
+                " != " + std::to_string(other.rows));
+        }
+
+        Matrix<T> result(rows, other.cols);
+        for (size_t i = 0; i < rows; ++i) {
+            for (size_t j = 0; j < other.cols; ++j) 
             {
-                result(i, j) += m_1(i, k) * m_2(k, j);
+                T sum = 0;
+                for (size_t k = 0; k < cols; ++k) 
+                {
+                    sum += (*this)(i, k) * other(k, j);
+                }
+                result(i, j) = sum;
             }
         }
+        return result;
     }
-    return result;
-}
+};
 
-
-
-// Эти смешанные умножения тоже стрёмные, поэтому их тоже выкидываю вне основного класса матрицы :)
-
-// Умножение матрицы на Вектор-столбец
-template<typename T, size_t Rows, size_t Cols>
-Vector<T> operator*(const Matrix<T, Rows, Cols>& matrix, const Vector<T>& vector)
+// Умножение матрицы на вектор-столбец
+template <typename T>
+Vector<T> operator*(const Matrix<T>& matrix, const Vector<T>& vector) 
 {
-    if (vector.getSize() != Cols)
+    if (matrix.getCols() != vector.getSize())
     {
         throw std::invalid_argument(
-            "Размер вектора должен совпадать с количеством столбцов матрицы: " +
-            std::to_string(vector.getSize()) + " != " + std::to_string(Cols)
-        );
-    }
+            "Размер вектора должен совпадать с количеством столбцов матрицы");
+    } 
 
-    Vector<T> result(Rows); // Вектор-столбец 
-    for (size_t i = 0; i < Rows; ++i)
+    Vector<T> result(matrix.getRows());
+    for (size_t i = 0; i < matrix.getRows(); ++i) 
     {
         T sum = 0;
-        for (size_t j = 0; j < Cols; ++j)
+        for (size_t j = 0; j < matrix.getCols(); ++j) 
         {
             sum += matrix(i, j) * vector[j];
         }
@@ -186,24 +174,21 @@ Vector<T> operator*(const Matrix<T, Rows, Cols>& matrix, const Vector<T>& vector
     return result;
 }
 
-
 // Умножение вектора-строки на матрицу
-template<typename T, size_t Rows, size_t Cols>
-Vector<T> operator*(const Vector<T>& vector, const Matrix<T, Rows, Cols>& matrix)
+template <typename T>
+Vector<T> operator*(const Vector<T>& vector, const Matrix<T>& matrix)
 {
-    if (vector.getSize() != Rows)
+    if (vector.getSize() != matrix.getRows())
     {
         throw std::invalid_argument(
-            "Размер вектора должен совпадать с количеством строк матрицы: " +
-            std::to_string(vector.getSize()) + " != " + std::to_string(Rows)
-        );
+            "Размер вектора должен совпадать с количеством строк матрицы");
     }
 
-    Vector<T> result(Cols); // Вектор-строка размером Cols
-    for (size_t j = 0; j < Cols; ++j)
+    Vector<T> result(matrix.getCols());
+    for (size_t j = 0; j < matrix.getCols(); ++j) 
     {
         T sum = 0;
-        for (size_t i = 0; i < Rows; ++i)
+        for (size_t i = 0; i < matrix.getRows(); ++i)
         {
             sum += vector[i] * matrix(i, j);
         }

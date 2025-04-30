@@ -1,241 +1,291 @@
 #include <iostream>
-#include <sstream>
 #include <string>
-#include <map>
-#include "Matrix.h"
-#include "Vector.h"
+#include <vector>
+#include <limits>
+#include <variant>
 #include <locale>
-#include <cstdio>
+#include <map>
+#include <sstream>
+#include <algorithm>
+#include "Vector.h"
+#include "Matrix.h"
 
+using MatrixVariant = std::variant<Matrix<int>, Matrix<float>, Matrix<double>>;
+using VectorVariant = std::variant<Vector<int>, Vector<float>, Vector<double>>;
 
-int main()
+std::map<char, MatrixVariant> matrixes;
+std::map<char, VectorVariant> vectors;
 
+// Функция для определения типа числа и парсинга из строки в число
+template<typename T>
+T Str_to_Num(const std::string& s)
 {
-    setlocale(LC_ALL, "Russian");
+    if constexpr (std::is_same_v<T, int>) return std::stoi(s);
+    else if constexpr (std::is_same_v<T, float>) return std::stof(s);
+    else if constexpr (std::is_same_v<T, double>) return std::stod(s);
+}
 
+// Функция для создания вектора
+template<typename T>
+void Vec_Create(const std::string& comand, char name, bool isColumn = false)
+{
+    std::istringstream iss(comand); // это поток ввода из строки
+    std::string num; // переменная для хранения каждого числа пока в виде строки
+    std::vector<T> elements;
+
+    while (getline(iss, num, ','))
+    {
+        if (!num.empty()) {
+            elements.push_back(Str_to_Num<T>(num));
+        }
+    }
+
+    if (isColumn)
+    {
+        Matrix<T> mat(elements.size(), 1);
+        for (size_t i = 0; i < elements.size(); ++i)
+        {
+            mat(i, 0) = elements[i];
+        }
+        matrixes[name] = mat;
+    }
+    else
+    {
+        Vector<T> vec(elements.size());
+        for (size_t i = 0; i < elements.size(); ++i)
+        {
+            vec[i] = elements[i];
+        }
+        vectors[name] = vec;
+    }
+}
+
+// Функция для создания матрицы
+template<typename T>
+void createMatrix(const std::string& data, char name)
+{
+    std::vector<std::vector<T>> rows;
+    std::istringstream rowStream(data);
+    std::string rowStr;
+
+    while (getline(rowStream, rowStr, ';'))
+    {
+        std::istringstream numStream(rowStr);
+        std::string num;
+        std::vector<T> currentRow;
+
+        while (getline(numStream, num, ','))
+        {
+            if (!num.empty()) {
+                currentRow.push_back(Str_to_Num<T>(num));
+            }
+        }
+
+        if (!currentRow.empty()) {
+            rows.push_back(currentRow);
+        }
+    }
+
+    if (!rows.empty()) {
+        Matrix<T> mat(rows.size(), rows[0].size());
+        for (size_t i = 0; i < rows.size(); ++i) {
+            for (size_t j = 0; j < rows[i].size(); ++j) {
+                mat(i, j) = rows[i][j];
+            }
+        }
+        matrixes[name] = mat;
+    }
+}
+
+// Функция для вывода переменной
+void printVariable(char name) {
+    if (matrixes.count(name)) {
+        std::visit([](auto&& mat) {
+            std::cout << mat;
+            }, matrixes[name]);
+        return;
+    }
+
+    if (vectors.count(name)) {
+        std::visit([](auto&& vec) {
+            std::cout << vec;
+            }, vectors[name]);
+        return;
+    }
+
+    std::cerr << "Ошибка: переменная '" << name << "' не найдена\n";
+}
+
+// Функция для выполнения математических операций
+template <typename T>
+// Функция для выполнения математических операций (не шаблонная!)
+void performOperation(const std::string& operation) {
+    if (operation.length() != 5) {
+        std::cerr << "Ошибка: неверный формат операции\n";
+        return;
+    }
+
+    char var1 = operation[0];
+    char op = operation[1];
+    char var2 = operation[2];
+    char result = operation[4]; // Формат: "A+B=C"
+
+    try {
+        // Проверяем существование переменных
+        if (!matrixes.count(var1) && !vectors.count(var1)) {
+            throw std::runtime_error("Переменная " + std::string(1, var1) + " не найдена");
+        }
+        if (!matrixes.count(var2) && !vectors.count(var2)) {
+            throw std::runtime_error("Переменная " + std::string(1, var2) + " не найдена");
+        }
+
+        // Матричные операции
+        if (matrixes.count(var1) && matrixes.count(var2)) {
+            auto perform = [&](auto&& m1, auto&& m2) {
+                auto res = m1; // Создаем копию для определения типа
+                switch (op) {
+                    case '+': res = m1 + m2; break;
+                    case '-': res = m1 - m2; break;
+                    case '*': res = m1 * m2; break;
+                    default: throw std::runtime_error("Неподдерживаемая операция для матриц");
+                }
+                matrixes[result] = res;
+            };
+            std::visit(perform, matrixes[var1], matrixes[var2]);
+        }
+        // Векторные операции
+        else if (vectors.count(var1) && vectors.count(var2)) {
+            auto perform = [&](auto&& v1, auto&& v2) {
+                auto res = v1; // Создаем копию для определения типа
+                switch (op) {
+                    case '+': res = v1 + v2; break;
+                    case '-': res = v1 - v2; break;
+                    case '*': res = v1 * v2; break;
+                    case '/': res = v1 / v2; break;
+                    default: throw std::runtime_error("Неподдерживаемая операция для векторов");
+                }
+                vectors[result] = res;
+            };
+            std::visit(perform, vectors[var1], vectors[var2]);
+        }
+        else {
+            throw std::runtime_error("Несовместимые типы переменных для операции");
+        }
+
+        std::cout << "Операция выполнена успешно. Результат в переменной " << result << std::endl;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Ошибка: " << e.what() << std::endl;
+    }
+}
+
+// Определяем тип чисел (int/float/double)
+void parseData(const std::string& data, char name) {
+    bool hasSemicolon = data.find(';') != std::string::npos;
+    bool hasComma = data.find(',') != std::string::npos;
+    bool hasDot = data.find('.') != std::string::npos;
+
+    try {
+        if (hasSemicolon && hasComma) {
+            if (hasDot) createMatrix<double>(data, name);
+            else createMatrix<int>(data, name);
+        }
+        else if (hasSemicolon) {
+            if (hasDot) Vec_Create<double>(data, name, true);
+            else Vec_Create<int>(data, name, true);
+        }
+        else {
+            if (hasDot) Vec_Create<double>(data, name);
+            else Vec_Create<int>(data, name);
+        }
+        std::cout << "Успешно создана переменная " << name << "\n";
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Ошибка при создании переменной " << name << ": " << e.what() << std::endl;
+    }
+}
+
+int main() {
+    setlocale(LC_ALL, "Russian");
 
     char f_or_c;
     printf("---- Как вы хотите задать данные? ----\n1. Через консоль\n2. Через файл\n");
 
-repeat__f_or_c:
+repeat_choice:
     printf("-> ");
-    std::cin >> f_or_c; // не scanf, потому что возникает бесконечный цикл
+    scanf_s(" %c", &f_or_c);
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-    switch (f_or_c)
-    {
-    case '1':
-        printf("Выбран ввод через консоль.\n");
+    switch (f_or_c) {
+    case '1': {
+        printf("\n--- Выбран ввод через консоль ---\n\n");
+
+        // Основной цикл ввода команд
+        while (true) {
+            printf("Введите команду (Примеры: A = [1,2;3,4], print(A), A+B=C, exit)\n-> ");
+
+            std::string comand;
+            std::getline(std::cin, comand);
+
+            // Проверка на команду выхода
+            if (comand == "exit") {
+                return 0;
+            }
+
+            // Проверка на команду print
+            if (comand.find("print(") != std::string::npos) {
+                size_t start = comand.find('(');
+                size_t end = comand.find(')');
+                if (start != std::string::npos && end != std::string::npos) {
+                    char varName = comand[start + 1];
+                    printVariable(varName);
+                }
+                continue;
+            }
+
+            // Проверка на математическую операцию (формат: A+B=C)
+            if (comand.size() == 5 && (comand[1] == '+' || comand[1] == '-' || comand[1] == '*' || comand[1] == '/') && comand[3] == '=') {
+                performOperation<int>(comand);
+                continue;
+            }
+
+            // Обработка создания переменной
+            size_t start = comand.find('[');
+            size_t end = comand.find(']');
+            std::string filtered_comand;
+            char varName = ' ';
+
+            if (start != std::string::npos && end != std::string::npos) {
+                // Извлекаем имя переменной (первую букву в строке)
+                for (char c : comand) {
+                    if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) {
+                        varName = c;
+                        break;
+                    }
+                }
+
+                // Извлекаем данные между [ и ] и удаляем все пробелы
+                filtered_comand = comand.substr(start + 1, end - start - 1);
+                filtered_comand.erase(std::remove(filtered_comand.begin(), filtered_comand.end(), ' '), filtered_comand.end());
+            }
+
+            if (varName != ' ' && !filtered_comand.empty()) {
+                printf("\nОтфильтрованные данные: %s\n", filtered_comand.c_str());
+                parseData(filtered_comand, varName);
+            }
+            else {
+                printf("\nОшибка: неверный формат команды\n");
+            }
+        }
         break;
+    }
     case '2':
         printf("Выбран ввод через файл.\n");
         break;
     default:
         printf("Ошибка: введите 1 или 2.\n");
-        goto repeat__f_or_c;
+        goto repeat_choice;
     }
 
-    std::string equation;
-    std::getline(std::cin,equation);
-
-    size_t pos_1 = equation.find("[");
-    size_t pos_2 = equation.find("]");
-
-
-    char word = 0;
-    char matrix_char = 0, vector_col_char = 0, vector_row_char = 0;
-
-
-    if (word >= 65 && word <= 90)
-    {
-        word = matrix_char;
-    }
-
-   /* if (equation.starts_with())
-    {
-        
-    }*/
+    return 0;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//void handleInputMatrixOrVector() {
-//    std::string name, type;
-//    std::cout << "Введите имя переменной (например, A или v): ";
-//    std::cin >> name;
-//
-//    std::cout << "Введите тип (matrix/vector): ";
-//    std::cin >> type;
-//
-//    std::cin.ignore(); // Очистка буфера
-//
-//    if (type == "matrix") {
-//        std::cout << "Введите матрицу в формате [a1, a2, a3; b1, b2, b3; c1, c2, c3]: ";
-//        std::string input;
-//        std::getline(std::cin, input);
-//
-//        // Преобразование ввода в матрицу (в примере для 3x3)
-//        std::stringstream ss(input);
-//        Matrix<double, 3, 3> matrix;
-//        char ch;
-//        double val;
-//        for (size_t i = 0; i < 3; ++i) {
-//            for (size_t j = 0; j < 3; ++j) {
-//                ss >> val;
-//                matrix(i, j) = val;
-//                ss >> ch;  // Пропуск запятой или точки с запятой
-//            }
-//        }
-//        matrices[name] = matrix;  // Сохраняем матрицу
-//    }
-//    else if (type == "vector") {
-//        std::cout << "Введите вектор в формате [1; 2; 3]: ";
-//        std::string input;
-//        std::getline(std::cin, input);
-//
-//        // Преобразование ввода в вектор
-//        std::stringstream ss(input);
-//        Vector<double> vector;
-//        double val;
-//        char ch;
-//        while (ss >> val) {
-//            vector.push_back(val);
-//            ss >> ch;  // Пропуск точки с запятой
-//        }
-//        vectors[name] = vector;  // Сохраняем вектор
-//    }
-//}
-//
-//void performOperations() {
-//    std::string expr;
-//    std::cout << "Введите выражение для выполнения (например, A + B, A * v, и т.д.): ";
-//    std::cin.ignore();  // Очистка буфера
-//    std::getline(std::cin, expr);
-//
-//    std::stringstream ss(expr);
-//    std::string leftOperand, op, rightOperand;
-//    ss >> leftOperand >> op >> rightOperand;
-//
-//    try {
-//        if (op == "+") {
-//            if (matrices.find(leftOperand) != matrices.end() && matrices.find(rightOperand) != matrices.end()) {
-//                std::cout << matrices[leftOperand] + matrices[rightOperand] << std::endl;
-//            }
-//            else if (vectors.find(leftOperand) != vectors.end() && vectors.find(rightOperand) != vectors.end()) {
-//                std::cout << vectors[leftOperand] + vectors[rightOperand] << std::endl;
-//            }
-//            else {
-//                throw std::invalid_argument("Ошибка: несоответствующие типы данных для сложения!");
-//            }
-//        }
-//        else if (op == "-") {
-//            if (matrices.find(leftOperand) != matrices.end() && matrices.find(rightOperand) != matrices.end()) {
-//                std::cout << matrices[leftOperand] - matrices[rightOperand] << std::endl;
-//            }
-//            else if (vectors.find(leftOperand) != vectors.end() && vectors.find(rightOperand) != vectors.end()) {
-//                std::cout << vectors[leftOperand] - vectors[rightOperand] << std::endl;
-//            }
-//            else {
-//                throw std::invalid_argument("Ошибка: несоответствующие типы данных для вычитания!");
-//            }
-//        }
-//        else if (op == "*") {
-//            if (matrices.find(leftOperand) != matrices.end() && vectors.find(rightOperand) != vectors.end()) {
-//                std::cout << matrices[leftOperand] * vectors[rightOperand] << std::endl;
-//            }
-//            else if (vectors.find(leftOperand) != vectors.end() && matrices.find(rightOperand) != matrices.end()) {
-//                std::cout << vectors[leftOperand] * matrices[rightOperand] << std::endl;
-//            }
-//            else {
-//                throw std::invalid_argument("Ошибка: несоответствующие типы данных для умножения!");
-//            }
-//        }
-//        else {
-//            std::cout << "Неверная операция!" << std::endl;
-//        }
-//    }
-//    catch (const std::exception& e) {
-//        std::cout << "Ошибка: " << e.what() << std::endl;
-//    }
-//}
-//
-//void printVariable() {
-//    std::string name;
-//    std::cout << "Введите имя переменной для печати: ";
-//    std::cin >> name;
-//
-//    if (matrices.find(name) != matrices.end()) {
-//        std::cout << matrices[name] << std::endl;
-//    }
-//    else if (vectors.find(name) != vectors.end()) {
-//        std::cout << vectors[name] << std::endl;
-//    }
-//    else {
-//        std::cout << "Переменная не найдена!" << std::endl;
-//    }
-//}
-//
-//int mainn() {
-//    bool running = true;
-//    while (running) {
-//        printMenu();
-//        int choice;
-//        std::cout << "Выберите опцию: ";
-//        std::cin >> choice;
-//
-//        switch (choice) {
-//        case 1:
-//            handleInputMatrixOrVector();
-//            break;
-//        case 2:
-//            performOperations();
-//            break;
-//        case 3:
-//            printVariable();
-//            break;
-//        case 4:
-//            running = false;
-//            break;
-//        default:
-//            std::cout << "Неверный выбор, попробуйте снова!" << std::endl;
-//        }
-//    }
-//    return 0;
-//}

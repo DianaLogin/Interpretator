@@ -12,7 +12,7 @@ private:
 	T* data;
 
 public:
-	Vector() : size(0), data(nullptr) {}
+	Vector() = default;
 	Vector(const std::initializer_list<T>& initList) : size(initList.size())
 	{
 		data = new T[size];
