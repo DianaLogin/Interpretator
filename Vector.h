@@ -173,3 +173,19 @@ T operator* (const Vector<T>& v_1, const Vector<T>& v_2)
 	return sum;
 }
 
+template <typename T>
+Vector<T> operator/(const Vector<T>& v_1, const Vector<T>& v_2)
+{
+	if (v_1.getSize() != v_2.getSize())
+	{
+		throw std::invalid_argument("–азмеры делимых векторов не совпадают!");
+	}
+
+	Vector<T> result(v_1.getSize());
+	for (size_t i = 0; i < v_1.getSize(); ++i)
+	{
+		result[i] = v_1[i] / v_2[i];
+	}
+	return result;
+}
+
