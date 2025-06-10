@@ -3,6 +3,7 @@
 #include <iostream>
 #include <memory>
 #include <ranges>
+#include <iomanip>
 
 template<typename T>
 class Vector
@@ -98,6 +99,42 @@ public:
 		return size;
 	}
 
+	template <typename T>
+	bool is_one_or_zero(T value)
+	{
+		return std::fabs(value - 1.0f) < 1e-6f || std::fabs(value - 0.0f) < 1e-6f;
+	}
+
+	template <typename T>
+	bool is_one(T value)
+	{
+		return std::fabs(value - 1.0f) < 1e-6f;
+	}
+
+	bool all_of() const
+	{
+		for (const T& val : data)
+		{
+			if (!is_one_or_zero(val))
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool any_of() const
+	{
+		for (const T& val : data)
+		{
+			if (is_one(val))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
 	~Vector()
 	{
 		delete[] data;
@@ -105,19 +142,16 @@ public:
 };
 
 template<typename T>
-std::ostream& operator<<(std::ostream& out, const Vector<T>& arr)
+std::ostream& operator<<(std::ostream& os, const Vector<T>& v)
 {
-	out << "{";
-	for (size_t i = 0; i < arr.getSize(); ++i)
+	os << "{";
+	for (size_t i = 0; i < v.getSize(); ++i)
 	{
-		out << arr[i];
-		if (i < arr.getSize() - 1)
-		{
-			out << ",";
-		}
+		os << std::fixed << std::setprecision(2) << v[i];
+		if (i < v.getSize() - 1) os << ",";
 	}
-	out << "}";
-	return out;
+	os << "}";
+	return os;
 }
 
 template <typename T>
@@ -171,6 +205,18 @@ T operator* (const Vector<T>& v_1, const Vector<T>& v_2)
 	}
 
 	return sum;
+}
+
+template <typename T>
+Vector<T> operator* (const Vector<T>& v, const T& scalar)
+{
+	Vector<T> res(v.getSize());
+	for (size_t i = 0; i < v.getSize(); ++i)
+	{
+		res[i] *= v[i] * scalar;
+	}
+
+	return res;
 }
 
 template <typename T>
